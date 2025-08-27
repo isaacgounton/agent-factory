@@ -7,8 +7,8 @@ services:
       - "8000:8000"
     environment:
       - STORAGE_BACKEND=minio
-      - AWS_ACCESS_KEY_ID=agent-factory
-      - AWS_SECRET_ACCESS_KEY=agent-factory
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-yourusername}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-yourpassword}
       - AWS_ENDPOINT_URL=http://minio:9000
       - S3_BUCKET_NAME=agents
       - TAVILY_API_KEY=${TAVILY_API_KEY}
@@ -24,8 +24,8 @@ services:
       - "9000:9000"
       - "9091:9091"
     environment:
-      - MINIO_ROOT_USER=agent-factory
-      - MINIO_ROOT_PASSWORD=agent-factory
+      - MINIO_ROOT_USER=${AWS_ACCESS_KEY_ID:-yourusername}
+      - MINIO_ROOT_PASSWORD=${AWS_SECRET_ACCESS_KEY:-yourpassword}
     command: server /data --console-address ":9091"
     volumes:
       - minio-data:/data
