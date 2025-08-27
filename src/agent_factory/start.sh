@@ -17,11 +17,18 @@ else
     chat_flag="--nochat"
 fi
 
-exec uv run -m agent_factory \
+# Start the agent server in the background
+uv run -m agent_factory \
     --framework "$FRAMEWORK" \
     --model "$MODEL" \
     --host "$A2A_SERVER_HOST" \
     --port "$A2A_SERVER_PORT" \
     --log-level "$LOG_LEVEL" \
     --max-turns "$MAX_TURNS" \
-    "$chat_flag"
+    "$chat_flag" &
+
+# Wait for the agent server to start
+sleep 5
+
+# Start the Chainlit web interface on port 8000 (foreground)
+exec uv run chainlit run src/agent_factory/chainlit.py --host 0.0.0.0 --port 8000
