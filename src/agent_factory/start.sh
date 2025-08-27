@@ -31,4 +31,4 @@ uv run -m agent_factory \
 sleep 5
 
 # Start the Chainlit web interface on port 8000 (foreground)
-exec uv run chainlit run src/agent_factory/chainlit.py --host 0.0.0.0 --port 8000
+exec uv run chainlit run chainlit.py --host 0.0.0.0 --port 8000
