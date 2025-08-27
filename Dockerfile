@@ -25,6 +25,9 @@ ENV TRACES_DIR=/traces
 RUN mkdir -p ${TRACES_DIR} && \
     chmod 777 ${TRACES_DIR}
 
+# Install curl for health checks
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
 # Define an argument for the version
 ARG APP_VERSION
 
