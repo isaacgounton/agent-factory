@@ -4,7 +4,7 @@ services:
   agent-factory:
     build: .
     ports:
-      - "8000:8000"
+      - "8004:8000"
     environment:
       - STORAGE_BACKEND=minio
       - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-yourusername}
