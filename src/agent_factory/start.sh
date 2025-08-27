@@ -1,9 +1,6 @@
 #!/bin/sh
 set -eu
 
-# Add better error handling
-trap 'echo "Error occurred at line $LINENO"; exit 1' ERR
-
 # Set default values for environment variables if not set
 : "${FRAMEWORK:=openai}"
 : "${MODEL:=o3}"
