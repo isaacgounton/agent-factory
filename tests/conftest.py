@@ -1,3 +1,4 @@
+import os
 import sys
 import textwrap
 from pathlib import Path
@@ -10,6 +11,29 @@ from rich.table import Table
 
 project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(project_root))
+
+
+@pytest.fixture(scope="session", autouse=True)
+def setup_test_environment():
+    """Set up test environment to avoid external dependencies."""
+    # Force local storage backend to avoid S3/MinIO network calls
+    original_storage_backend = os.environ.get("STORAGE_BACKEND")
+    os.environ["STORAGE_BACKEND"] = "local"
+    
+    # Add test bin directory to PATH for mcpd stub
+    test_bin_dir = str(project_root / "tests" / "bin")
+    original_path = os.environ.get("PATH", "")
+    os.environ["PATH"] = f"{test_bin_dir}:{original_path}"
+    
+    yield
+    
+    # Restore original environment
+    if original_storage_backend is not None:
+        os.environ["STORAGE_BACKEND"] = original_storage_backend
+    else:
+        os.environ.pop("STORAGE_BACKEND", None)
+    
+    os.environ["PATH"] = original_path
 
 
 @pytest.fixture(scope="session")
