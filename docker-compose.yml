@@ -6,36 +6,17 @@ services:
     ports:
       - "8004:8000"
     environment:
-      - STORAGE_BACKEND=minio
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-yourusername}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-yourpassword}
-      - AWS_ENDPOINT_URL=http://minio:9000
-      - S3_BUCKET_NAME=agents
+      - STORAGE_BACKEND=s3
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_ENDPOINT_URL=${AWS_ENDPOINT_URL}
+      - S3_BUCKET_NAME=${S3_BUCKET_NAME}
+      - S3_REGION=${S3_REGION}
       - TAVILY_API_KEY=${TAVILY_API_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-    depends_on:
-      - minio
-    networks:
-      - agent-network
-
-  minio:
-    image: quay.io/minio/minio
-    ports:
-      - "9000:9000"
-      - "9091:9091"
-    environment:
-      - MINIO_ROOT_USER=${AWS_ACCESS_KEY_ID:-yourusername}
-      - MINIO_ROOT_PASSWORD=${AWS_SECRET_ACCESS_KEY:-yourpassword}
-      - MINIO_BROWSER_REDIRECT_URL=https://agents-s3.dahopevi.com
-    command: server /data --console-address ":9091"
-    volumes:
-      - minio-data:/data
     networks:
       - agent-network
 
 networks:
   agent-network:
     driver: bridge
-
-volumes:
-  minio-data:
