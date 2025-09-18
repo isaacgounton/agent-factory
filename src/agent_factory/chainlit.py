@@ -32,7 +32,7 @@ PUBLIC_AGENT_CARD_PATH = "/.well-known/agent.json"
 EXTENDED_AGENT_CARD_PATH = "/agent/authenticatedExtendedCard"
 
 # Settings for the A2A server connection
-A2A_SERVER_HOST = "localhost"
+A2A_SERVER_HOST = os.environ.get("A2A_SERVER_HOST", "localhost")
 A2A_SERVER_PORT = int(os.environ.get("A2A_SERVER_PORT", "8080"))
 TIMEOUT = 600  # 10 minutes
 

@@ -59,8 +59,8 @@ COPY src /app/src
 RUN set -e; \
     extras_flags=""; \
     if [ -n "${UV_EXTRAS}" ]; then \
-      echo "Installing uv extras: ${UV_EXTRAS}"; \
-      for e in ${UV_EXTRAS}; do extras_flags="$extras_flags --extra $e"; done; \
+    echo "Installing uv extras: ${UV_EXTRAS}"; \
+    for e in ${UV_EXTRAS}; do extras_flags="$extras_flags --extra $e"; done; \
     fi; \
     uv sync --locked --no-cache --no-editable --no-dev $extras_flags
 
@@ -72,8 +72,9 @@ WORKDIR /app/src/agent_factory
 # Expose the port the app runs on
 EXPOSE 8000
 
-# Create startup script
+# Create startup scripts
 RUN chmod +x start.sh
+RUN chmod +x start_with_mode.sh
 
 # Run the application
 CMD ["./start.sh"]
