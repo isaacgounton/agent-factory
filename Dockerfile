@@ -7,9 +7,9 @@ FROM mzdotai/mcpd:${MCPD_VERSION} AS mcpd
 # Main application stage
 FROM python:3.13-slim
 
-# Accept space-separated extras from project.optional-dependencies (e.g. "openai langchain")
+# Accept space-separated extras from project.optional-dependencies (e.g. "openai langchain groq anthropic")
 # Check pyproject.toml for available extras
-ARG UV_EXTRAS
+ARG UV_EXTRAS="openai groq"
 
 # Set the working directory in the container
 WORKDIR /app

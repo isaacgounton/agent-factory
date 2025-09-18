@@ -76,3 +76,19 @@ openai = [
 langchain = [
   "any-agent[langchain]",
 ]
+
+groq = [
+  "any-agent[groq]",
+]
+
+anthropic = [
+  "any-agent[anthropic]",
+]
+
+google = [
+  "any-agent[google]",
+]
+
+all = [
+  "any-agent[openai,langchain,groq,anthropic,google]",
+]
