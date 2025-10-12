@@ -65,7 +65,7 @@ RUN set -e; \
     echo "Installing uv extras: ${UV_EXTRAS}"; \
     for e in ${UV_EXTRAS}; do extras_flags="$extras_flags --extra $e"; done; \
     fi; \
-    uv sync --locked --no-cache --no-editable --no-dev $extras_flags
+    uv sync --no-cache --no-editable --no-dev $extras_flags
 
 RUN rm -rf /app/build
 
