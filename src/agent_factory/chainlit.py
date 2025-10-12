@@ -167,13 +167,13 @@ async def create_agent(message: cl.Message):
 
                 if final_response.status == Status.COMPLETED:
                     prepared_artifacts = prepare_agent_artifacts(final_response.model_dump())
-                    storage_backend.save(prepared_artifacts, output_dir)
+                    zip_filename = storage_backend.save(prepared_artifacts, output_dir)
 
                     # Add agent URL to the message
-                    if isinstance(storage_backend, S3Storage):
+                    if isinstance(storage_backend, S3Storage) and zip_filename:
                         base_url = f"https://{storage_backend.endpoint_url or 's3.amazonaws.com'}/{storage_backend.bucket_name}"
-                        agent_url = f"{base_url}/{output_dir}/"
-                        final_response.message += f"\n\n🔗 **Agent URL:** {agent_url}"
+                        agent_url = f"{base_url}/{output_dir}/{zip_filename}"
+                        final_response.message += f"\n\n🔗 **Agent Download:** {agent_url}"
 
                 response_json = final_response.model_dump_json()
 

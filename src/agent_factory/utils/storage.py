@@ -3,6 +3,7 @@ import tempfile
 import zipfile
 from abc import ABC, abstractmethod
 from pathlib import Path
+from uuid import uuid4
 
 import boto3
 from any_agent.tracing.agent_trace import AgentTrace
@@ -17,7 +18,7 @@ class StorageBackend(ABC):
         pass
 
     @abstractmethod
-    def save(self, artifacts_to_save: dict[str, str], output_dir: Path) -> None:
+    def save(self, artifacts_to_save: dict[str, str], output_dir: Path) -> str:
         pass
 
     @abstractmethod
@@ -31,7 +32,7 @@ class LocalStorage(StorageBackend):
         """Human-readable string identifying the local storage."""
         return "Local Storage"
 
-    def save(self, artifacts_to_save: dict[str, str], output_dir: Path) -> None:
+    def save(self, artifacts_to_save: dict[str, str], output_dir: Path) -> str:
         output_dir = Path("generated_workflows") / output_dir
         output_path = self._setup_output_directory(output_dir)
         try:
@@ -41,8 +42,10 @@ class LocalStorage(StorageBackend):
                 with full_path.open("w", encoding="utf-8") as f:
                     f.write(content)
             logger.info(f"Agent files saved to folder {output_path}")
+            return str(output_path)
         except Exception as e:
             logger.warning(f"Warning: Failed to save agent outputs: {str(e)}")
+            return ""
 
     def _setup_output_directory(self, output_dir: Path) -> Path:
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -110,13 +113,15 @@ class S3Storage(StorageBackend):
             else:
                 raise
 
-    def save(self, artifacts_to_save: dict[str, str], output_dir: Path) -> None:
-        self._save_as_zip(artifacts_to_save, output_dir.name)
+    def save(self, artifacts_to_save: dict[str, str], output_dir: Path) -> str:
+        return self._save_as_zip(artifacts_to_save, output_dir.name)
 
-    def _save_as_zip(self, artifacts_to_save: dict[str, str], output_dir: str):
+    def _save_as_zip(self, artifacts_to_save: dict[str, str], output_dir: str) -> str:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
-            zip_path = temp_path / "agent_artifacts.zip"
+            unique_id = str(uuid4())[:8]  # Short unique ID
+            zip_filename = f"agent_{unique_id}.zip"
+            zip_path = temp_path / zip_filename
             with zipfile.ZipFile(zip_path, "w") as zipf:
                 for filename, content in artifacts_to_save.items():
                     file_path = temp_path / filename
@@ -126,13 +131,20 @@ class S3Storage(StorageBackend):
                     zipf.write(file_path, arcname=filename)
 
             try:
-                self.s3_client.upload_file(str(zip_path), self.bucket_name, f"{output_dir}/agent_artifacts.zip")
+                self.s3_client.upload_file(
+                    str(zip_path), 
+                    self.bucket_name, 
+                    f"{output_dir}/{zip_filename}",
+                    ExtraArgs={'ACL': 'public-read'}
+                )
                 logger.info(
                     f"Successfully uploaded agent artifacts to {self.storage_str} bucket "
                     f"{self.bucket_name} in folder {output_dir}"
                 )
+                return zip_filename
             except Exception as e:
                 logger.error(f"Failed to upload to {self.storage_str} bucket {self.bucket_name}. Error: {e}")
+                return ""
 
     def upload_trace_file(self, agent_trace: AgentTrace, output_dir: Path) -> None:
         """Upload agent trace to S3/MinIO storage."""
@@ -145,6 +157,7 @@ class S3Storage(StorageBackend):
                 Key=s3_key,
                 Body=agent_trace_json.encode("utf-8"),
                 ContentType="application/json",
+                ACL="public-read",
             )
             logger.info(
                 f"Successfully uploaded agent trace to {self.storage_str} bucket {self.bucket_name} at {s3_key}"
