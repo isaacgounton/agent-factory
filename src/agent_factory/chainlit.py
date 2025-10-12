@@ -27,6 +27,7 @@ from agent_factory.utils import (
     process_streaming_response_message,
 )
 from agent_factory.utils.client_utils import ProcessedStreamingResponse
+from agent_factory.utils.storage import S3Storage
 
 PUBLIC_AGENT_CARD_PATH = "/.well-known/agent.json"
 EXTENDED_AGENT_CARD_PATH = "/agent/authenticatedExtendedCard"
@@ -167,6 +168,12 @@ async def create_agent(message: cl.Message):
                 if final_response.status == Status.COMPLETED:
                     prepared_artifacts = prepare_agent_artifacts(final_response.model_dump())
                     storage_backend.save(prepared_artifacts, output_dir)
+
+                    # Add agent URL to the message
+                    if isinstance(storage_backend, S3Storage):
+                        base_url = f"https://{storage_backend.endpoint_url or 's3.amazonaws.com'}/{storage_backend.bucket_name}"
+                        agent_url = f"{base_url}/{output_dir}/"
+                        final_response.message += f"\n\n🔗 **Agent URL:** {agent_url}"
 
                 response_json = final_response.model_dump_json()
 
