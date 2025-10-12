@@ -2,7 +2,10 @@ version: "3.8"
 
 services:
   agent-factory:
-    build: .
+    build:
+      context: .
+      args:
+        - UV_EXTRAS=openai groq
     ports:
       - "8004:8000"
     environment:
