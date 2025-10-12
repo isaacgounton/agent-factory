@@ -25,68 +25,55 @@ MCPD_ENDPOINT = os.getenv("MCPD_ADDR", "http://localhost:8090")
 MCPD_API_KEY = os.getenv("MCPD_API_KEY", None)
 
 # ========== Structured output definition ==========
-from pydantic import BaseModel, Field
-from typing import List
-
-class Turn(BaseModel):
-    speaker: str = Field(..., description="Name of the speaker for this dialogue turn.")
-    text: str = Field(..., description="Spoken text for this turn.")
-    audio_path: str = Field(..., description="Filesystem path to the generated MP3 for this turn.")
-
 class StructuredOutput(BaseModel):
-    url: str = Field(..., description="Original URL used as source material.")
-    script: List[Turn] = Field(..., description="Ordered list of dialogue turns with audio paths.")
-    final_podcast_path: str = Field(..., description="Filesystem path to the combined podcast MP3.")
+    podcast_mp3: str = Field(..., description="Absolute path to the final combined podcast mp3 file saved in /tmp.")
+    segment_files: list[str] = Field(..., description="Ordered list of absolute paths of the individual dialogue segment mp3 files.")
+    host_voice: str = Field(..., description="Voice name used for the host speaker.")
+    guest_voice: str = Field(..., description="Voice name used for the guest speaker.")
+    turns: int = Field(..., description="Total number of dialogue turns in the podcast.")
 
 # ========== System (Multi-step) Instructions ===========
 INSTRUCTIONS='''
-You are PodCreatorGPT, an expert multi-step workflow agent that transforms a web page into a short, engaging two-speaker podcast and outputs a ready-to-play MP3 file saved in /tmp.
-Follow this exact procedure:
+You are a multi-step agent that produces a short podcast MP3 based on the content of a webpage URL supplied by the user. Follow the steps exactly and use the specified tools.
 
-STEP-1  (Content Extraction)
-• Use extract_text_from_url(url) to fetch and clean all meaningful text from the user-supplied URL.
-• If extraction fails or returns < 500 characters, stop and reply with an error message encoded in StructuredOutput.final_podcast_path.
+Step 1 – Retrieve article text:
+• Use extract_text_from_url to download and extract the readable text from the provided URL.
+• If the tool returns an error message, stop and reply with that error.
 
-STEP-2  (Script Writing)
-• Call generate_podcast_script_with_llm(document_text=extracted_text,
-    num_hosts=2,
-    host_names=["Alex","Jordan"],
-    turns=16,
-    model="o3")
-• The tool returns a JSON array where each element is {"host_name":"host_line"}.
-• Parse it to obtain an ordered list of turns.
+Step 2 – Generate the podcast dialogue script:
+• Speaker names: Host = “Alex”, Guest = “Jordan”.
+• Voice mapping: Alex → "Aria", Jordan → "Drew".
+• Call generate_podcast_script_with_llm with:
+  – document_text = text from Step 1
+  – num_hosts = 2
+  – host_names = ["Alex", "Jordan"]
+  – turns = 16
+• The tool returns a JSON list where each item is one turn. Ensure there are ≤ 16 turns.
 
-STEP-3  (Voice Assignment)
-• Map hosts to ElevenLabs voices:
-    Alex → "Rachel"
-    Jordan → "Drew"
-• Keep a list mp3_paths = [] for the generated clips.
+Step 3 – Create per-turn audio files:
+• For each turn in order:
+  – Identify the speaker (Alex or Jordan).
+  – Call text_to_speech (ElevenLabs MCP) with parameters:
+     • text = speaker’s line
+     • voice_name = "Aria" if Alex else "Drew"
+     • output_dir = "/tmp"
+     • output_filename = f"segment_{index:02d}.mp3"
+  – Collect the absolute path returned for every segment.
 
-STEP-4  (Text-to-Speech per Turn)
-For each turn in order:
-    • Call text_to_speech(text=host_line,
-                        voice_name=assigned_voice,
-                        output_dir="/tmp",
-                        output_filename=f"turn_{idx:02d}_{host}.mp3")
-    • Append the returned absolute path to mp3_paths.
+Step 4 – Merge audio segments:
+• After all segments are created, call combine_mp3_files_for_podcast with:
+  – mp3_files = ordered list of segment paths
+  – output_filename = "podcast.mp3"
+  – output_dir = "/tmp"
+• Verify that a valid path is returned.
 
-STEP-5  (Combine Audio)
-• After all turns are voiced, call combine_mp3_files_for_podcast(mp3_files=mp3_paths,
-                                                 output_filename="podcast.mp3",
-                                                 output_dir="/tmp") and store the returned path as final_path.
-
-STEP-6  (Return Result)
-• Deliver a StructuredOutput JSON object with:
-    url – original URL
-    script – list of {speaker, text, audio_path}
-    final_podcast_path – final_path
-
-Critical rules:
-• Always save every intermediate MP3 and the final file in /tmp.
-• Do not exceed 16 turns.
-• Use the provided voices exactly.
-• Abort early with a helpful message if any step fails.
-• Respond ONLY with valid StructuredOutput JSON.
+Step 5 – Return structured JSON:
+Respond ONLY with a StructuredOutput object that contains:
+• podcast_mp3 – absolute path to the combined podcast file
+• segment_files – ordered list of the segment paths
+• host_voice – "Aria"
+• guest_voice – "Drew"
+• turns – total number of dialogue turns
 '''
 
 # ========== Tools definition ===========
@@ -103,13 +90,16 @@ try:
         print("No tools found via mcpd.")
     TOOLS.extend(mcp_server_tools)
 except McpdError as e:
-    print(f"Error connecting to mcpd: {e}", file=sys.stderr)
+    print(
+        f"Error connecting to mcpd: {e}. If the agent doesn't use any MCP servers you can safely ignore this error",
+        file=sys.stderr
+    )
 
 # ========== Running the agent via CLI ===========
 agent = AnyAgent.create(
-    "openai",
+    "tinyagent",
     AgentConfig(
-        model_id="o3",
+        model_id="openai/o3",
         instructions=INSTRUCTIONS,
         tools=TOOLS,
         output_type=StructuredOutput,  # name of the Pydantic v2 model defined above
@@ -119,8 +109,8 @@ agent = AnyAgent.create(
 
 
 def main(url: str):
-    """Generate a two-speaker, <16-turn podcast from a webpage URL, voice it with ElevenLabs, and output the final MP3 path."""
-    input_prompt = f"Create a short podcast (<16 turns) from the webpage at {url}."
+    """Generate a short podcast MP3 (≤16 dialogue turns) from the content of a given webpage URL, using ElevenLabs voices and saving all audio files to /tmp."""
+    input_prompt = f"Create a podcast from this URL: {url}"
     try:
         agent_trace = agent.run(prompt=input_prompt, max_turns=20)
     except AgentRunError as e:

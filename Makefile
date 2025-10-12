@@ -7,14 +7,18 @@
 -include .env
 export
 # Default environment variables for the container if missing.
-FRAMEWORK ?= openai
-MODEL ?= o3
+FRAMEWORK ?= tinyagent
+MODEL ?= openai/o3
 MAX_TURNS ?= 40
 A2A_SERVER_HOST ?= 0.0.0.0
 A2A_SERVER_PORT ?= 8080
 LOG_LEVEL ?= info
 CHAT ?= 0
 MCPD_VERSION ?= v0.0.6
+
+# If uv extras are not explicitly provided,
+# by default, use the one corresponding to the respective framework (currently supports openai and langchain)
+UV_EXTRAS ?= $(if $(filter $(FRAMEWORK),tinyagent),,$(FRAMEWORK))
 
 # Docker Configuration
 DOCKER_IMAGE := agent-factory
@@ -52,6 +56,7 @@ build: ## Build the Docker image for the server
 	@docker build \
 		--build-arg APP_VERSION=$(shell git describe --tags --dirty 2>/dev/null || echo "0.1.0.dev0") \
 		--build-arg MCPD_VERSION=$(MCPD_VERSION) \
+		--build-arg UV_EXTRAS="$(UV_EXTRAS)" \
 		-t $(DOCKER_IMAGE):$(DOCKER_TAG) \
 		.
 
@@ -63,11 +68,13 @@ check-env:
 
 run: build check-env ## Run the server interactively in the foreground
 	@echo "Starting server interactively on http://$(A2A_SERVER_HOST):$(A2A_SERVER_PORT)"
+	@echo "Using UV_EXTRAS=$(UV_EXTRAS)"
 	@docker run $(DOCKER_RUN_ARGS)
 
 
 run-detached: build check-env ## Run the server in the background (detached mode)
 	@echo "Starting server in detached mode..."
+	@echo "Using UV_EXTRAS=$(UV_EXTRAS)"
 	@docker run -d $(DOCKER_RUN_ARGS)
 
 
@@ -95,7 +102,7 @@ check-prompt-id-present:
 
 test-unit: ## Run unit tests
 	@uv run --group tests pytest -v tests/unit/
-	@uv run --group tests pytest -v tests/tools/
+	@uv run --group tests pytest -v tests/generated_agent_evaluation/unit/
 	@echo "Unit tests completed successfully!"
 
 wait-for-server:
@@ -143,6 +150,29 @@ test-generated-artifacts-integration: check-prompt-id-present ## Run artifact in
 	@echo "Running artifact integration tests for prompt-id: $(PROMPT_ID)..."
 	@uv run --group tests pytest tests/generated_artifacts/ -m artifact_integration --prompt-id=$(PROMPT_ID) -v
 	@echo "Artifact integration tests completed successfully!"
+
+# NOTE that the MOCK_TOKEN is not an actual secret, but we need to add the pragma for the commit to pass.
+# We define it as a variable visible to the target (first line), so that we can then assign its value to
+# all the env vars mcpd needs, but without sharing any "secrets" in clear (avoiding the need for other
+# pragmas, which were hard to add in the multiline if clause in the Makefile target...)
+# As these tests mock the tools that require those environment variables, we can do with mock keys/tokens.
+# pragma: allowlist secret
+test-generated-artifacts-integration-e2e: MOCK_TOKEN = mock
+test-generated-artifacts-integration-e2e: check-prompt-id-present
+	@if [ -f "tests/artifacts/$(PROMPT_ID)/secrets.prod.toml" ]; then \
+		echo "Starting mcpd as it is required for this agent"; \
+		export MCPD__ELEVENLABS_MCP__ELEVENLABS_API_KEY="$(MOCK_TOKEN)"; \
+		export MCPD__SLACK__SLACK_BOT_TOKEN="$(MOCK_TOKEN)"; \
+		export MCPD__SLACK__SLACK_TEAM_ID="$(MOCK_TOKEN)"; \
+		export MCPD__SQLITE__DB_PATH="blueprints.db"; \
+		mcpd daemon --runtime-file tests/artifacts/$(PROMPT_ID)/secrets.prod.toml --config-file tests/artifacts/$(PROMPT_ID)/.mcpd.toml & \
+		MCPD_PID=$$!; \
+		trap "kill $$MCPD_PID 2>/dev/null" EXIT; \
+		sh scripts/wait_for_mcpd_servers.sh && $(MAKE) test-generated-artifacts-integration PROMPT_ID="$(PROMPT_ID)" || { echo "::error::Tests for PROMPT_ID $(PROMPT_ID) failed!"; exit 1; }; \
+		kill $$MCPD_PID 2>/dev/null; \
+	else \
+		$(MAKE) test-generated-artifacts-integration PROMPT_ID="$(PROMPT_ID)" || { echo "::error::Tests for PROMPT_ID $(PROMPT_ID) failed!"; exit 1; }; \
+	fi
 
 # ====================================================================================
 # MCP Testing and Documentation

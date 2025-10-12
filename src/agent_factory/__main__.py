@@ -25,9 +25,9 @@ StarletteInstrumentor().instrument()
 
 
 async def main(
-    framework: str = "openai",
+    framework: str = "tinyagent",
     chat: bool = True,
-    model: str = "o3",
+    model: str = "openai/o3",
     max_turns: int = 40,
     host: str = "localhost",
     port: int = 8080,
@@ -52,7 +52,8 @@ async def main(
     from agent_factory.tools.search_tavily import search_tavily
     from agent_factory.tools.visit_webpage import visit_webpage
 
-    logger.info(f"Starting the server in {'chat' if chat else 'non-chat'} mode.")
+    logger.info(f"Starting the A2A server in {'chat' if chat else 'non-chat'} mode.")
+    logger.info(f"Using framework: {framework} and model: {model}")
 
     agent = await AnyAgent.create_async(
         framework,

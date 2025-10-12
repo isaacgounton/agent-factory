@@ -1,11 +1,10 @@
-# Webpage Summariser Agent
+# Webpage Summarizer Agent
 
-A simple agent that takes a webpage URL, extracts its text, and returns a concise summary.
+A simple agent that fetches any public webpage and returns a concise 4-6 sentence summary of its main content.
 
 # Prerequisites
 
 - uv
-- mcpd
 
 ## Install uv
 
@@ -20,8 +19,7 @@ A simple agent that takes a webpage URL, extracts its text, and returns a concis
 
 # Configuration
 
-Set the environment variables in the `.env` file that has been created for you. Add other environment variables as needed,
-for example, environment variables for your LLM provider.
+Create a `.env` file with any required environment variables (e.g. `OPENAI_API_KEY` for the summarization tool).
 
 # Run the Agent
 

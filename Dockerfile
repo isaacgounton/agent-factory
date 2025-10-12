@@ -7,14 +7,18 @@ FROM mzdotai/mcpd:${MCPD_VERSION} AS mcpd
 # Main application stage
 FROM python:3.13-slim
 
+# Accept space-separated extras from project.optional-dependencies (e.g. "openai langchain groq anthropic")
+# Check pyproject.toml for available extras
+ARG UV_EXTRAS="openai groq"
+
 # Set the working directory in the container
 WORKDIR /app
 
-ENV FRAMEWORK=openai
+ENV FRAMEWORK=tinyagent
 # Enable or disable chat mode
 # Set to 1 to enable chat mode, 0 to disable
 ENV CHAT=1
-ENV MODEL=o3
+ENV MODEL=openai/o3
 ENV MAX_TURNS=40
 ENV A2A_SERVER_HOST=0.0.0.0
 ENV A2A_SERVER_PORT=8080
@@ -33,21 +37,36 @@ ARG APP_VERSION
 
 # Set the environment variable for setuptools_scm
 ENV SETUPTOOLS_SCM_PRETEND_VERSION=${APP_VERSION}
+ENV UV_EXTRAS=${UV_EXTRAS}
 
 # Copy mcpd from the mcpd stage
 COPY --from=mcpd /usr/local/bin/mcpd /usr/local/bin/mcpd
 RUN chmod +x /usr/local/bin/mcpd
 
+# Install build-essential which enables use of gcc and g++ compilers
+# This is required for CPython dependencies (e.g. fastuuid)
+# fastuuid installation happens when installing any-agent
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends build-essential pkg-config && \
+    rm -rf /var/lib/apt/lists/*
+
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:0.8.4 /uv /uvx /usr/local/bin/
 
-# Copy application code and required project assets.
+# Copy application code and required project assets
 COPY pyproject.toml /app
 COPY uv.lock /app
 COPY src /app/src
 
-# Install dependencies using uv
-RUN uv sync --no-cache --locked --no-editable --no-dev
+# Install dependencies using uv with optional extras
+RUN set -e; \
+    extras_flags=""; \
+    if [ -n "${UV_EXTRAS}" ]; then \
+    echo "Installing uv extras: ${UV_EXTRAS}"; \
+    for e in ${UV_EXTRAS}; do extras_flags="$extras_flags --extra $e"; done; \
+    fi; \
+    uv sync --locked --no-cache --no-editable --no-dev $extras_flags
+
 RUN rm -rf /app/build
 
 # Set the working directory
@@ -56,8 +75,9 @@ WORKDIR /app/src/agent_factory
 # Expose the port the app runs on
 EXPOSE 8000
 
-# Create startup script
+# Create startup scripts
 RUN chmod +x start.sh
+RUN chmod +x start_with_mode.sh
 
 # Run the application
 CMD ["./start.sh"]
